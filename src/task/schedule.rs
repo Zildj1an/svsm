@@ -380,3 +380,69 @@ pub fn schedule() {
         .terminated_task
         .take();
 }
+
+#[cfg(test)]
+mod tests {
+
+    use crate::locking::*;
+    use crate::task::schedule::Box;
+    use crate::task::schedule::{Arc, RunQueue};
+    use crate::task::tasks::*;
+    use crate::task::*;
+
+    // Dummy extern "C" function as the task entry point
+    extern "C" fn dummy_entry() {}
+
+    #[test]
+    #[cfg_attr(test_in_svsm, ignore = "Offline testing")]
+    fn test_get_task() {
+        // Create a new RunQueue for testing
+        let mut run_queue = RunQueue::new(0);
+
+        // Create a dummy task for testing
+        let task1 = create_task(dummy_entry, TASK_FLAG_SHARE_PT, Some(1))
+            .expect("Failed to create AP initial task");
+
+        // Insert the tasks instances into the RunQueue
+        run_queue.tree().insert(task1.clone());
+
+        let task_id = {
+            let task1_lock = Arc::<TaskNode>::as_ptr(&task1);
+            unsafe { (*task1_lock).task.lock_read().id }
+        };
+
+        assert_eq!(task_id, run_queue.current_task_id());
+    }
+
+    #[test]
+    fn test_schedule() {
+        // Create a new RunQueue for testing
+        let mut run_queue = RunQueue::new(1);
+
+        // Create a dummy task for testing
+        let task1 = create_task(dummy_entry, TASK_FLAG_SHARE_PT, Some(1))
+            .expect("Failed to create AP initial task");
+
+        // Insert the tasks instances into the RunQueue
+        run_queue.tree().insert(task1.clone());
+
+        let task_id = {
+            let task1_lock = Arc::<TaskNode>::as_ptr(&task1);
+            unsafe { (*task1_lock).task.lock_read().id }
+        };
+
+        // Simulate a scheduling operation
+        let (next_task_ptr, current_task_ptr) = run_queue.schedule();
+
+        // Check if the next task pointer is Some and current task pointer is None
+        assert!(!next_task_ptr.is_null());
+        assert!(current_task_ptr.is_null());
+
+        // Simulate another scheduling operation
+        let (next_task_ptr, current_task_ptr) = run_queue.schedule();
+
+        // Check if the next task pointer is Some and current task pointer is Some
+        assert!(!next_task_ptr.is_null());
+        assert!(!current_task_ptr.is_null());
+    }
+}
