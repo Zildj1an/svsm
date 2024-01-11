@@ -380,3 +380,77 @@ pub fn schedule() {
         .terminated_task
         .take();
 }
+
+#[cfg(test)]
+mod tests {
+
+    use crate::locking::*;
+    use crate::task::schedule::Box;
+    use crate::task::schedule::{Arc, RunQueue};
+    use crate::task::tasks::*;
+    use crate::task::*;
+
+    // Dummy extern "C" function as the task entry point
+    extern "C" fn dummy_entry() {}
+
+    #[test]
+    fn test_insert_task() {
+        // Create a new RunQueue for testing
+        let mut run_queue = RunQueue::new(0);
+
+        // Create dummy tasks for testing
+        let task1 = create_task(dummy_entry, TASK_FLAG_SHARE_PT, Some(1))
+            .expect("Failed to create dummy initial task1");
+
+        let task2 = create_task(dummy_entry, TASK_FLAG_SHARE_PT, Some(1))
+            .expect("Failed to create dummy initial task2");
+
+        // Insert the tasks instances into the RunQueue
+        run_queue.tree().insert(task1.clone());
+        run_queue.tree().insert(task2.clone());
+
+        let task_id_1 = task1.task.lock_read().id;
+        let task_id_2 = task1.task.lock_read().id;
+        let task_id = run_queue.current_task_id();
+
+        assert!((task_id == task_id_1) || (task_id == task_id_2));
+
+        unsafe {
+            run_queue.deallocate(task1);
+            run_queue.deallocate(task2);
+        }
+    }
+
+    #[test]
+    fn test_schedule() {
+        // Create a new RunQueue for testing
+        let mut run_queue = RunQueue::new(1);
+
+        // Create a dummy task for testing
+        let task1 = create_task(dummy_entry, TASK_FLAG_SHARE_PT, Some(1))
+            .expect("Failed to create dummy task");
+
+        // Insert the tasks instances into the RunQueue
+        run_queue.tree().insert(task1.clone());
+
+        let task_id = task1.task.lock_read().id;
+
+        // Simulate a scheduling operation
+        let (next_task_ptr, current_task_ptr) = run_queue.schedule();
+
+        // Check if the next task pointer is Some and current task pointer is None
+        assert!(!next_task_ptr.is_null());
+        assert!(current_task_ptr.is_null());
+
+        // Simulate another scheduling operation
+        let (next_task_ptr, current_task_ptr) = run_queue.schedule();
+
+        // Check if the next task pointer is Some and current task pointer is Some
+        assert!(!next_task_ptr.is_null());
+        assert!(!current_task_ptr.is_null());
+
+        unsafe {
+            run_queue.deallocate(task1);
+        }
+    }
+}
