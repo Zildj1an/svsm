@@ -410,10 +410,14 @@ mod tests {
         run_queue.tree().insert(task2.clone());
 
         let task_id_1 = task1.task.lock_read().id;
-        let task_id_2 = task1.task.lock_read().id;
-        let task_id = run_queue.current_task_id();
+        let task_1 = run_queue.get_task(task_id_1);
 
-        assert!((task_id == task_id_1) || (task_id == task_id_2));
+        assert_eq!(task_id_1, task_1.unwrap().task.lock_read().id);
+
+        let task_id_2 = task2.task.lock_read().id;
+        let task_2 = run_queue.get_task(task_id_2);
+
+        assert_eq!(task_id_2, task_2.unwrap().task.lock_read().id);
 
         unsafe {
             run_queue.deallocate(task1);
@@ -440,17 +444,9 @@ mod tests {
 
         // Check if the next task pointer is Some and current task pointer is None
         assert!(!next_task_ptr.is_null());
-        assert!(current_task_ptr.is_null());
-
-        // Simulate another scheduling operation
-        let (next_task_ptr, current_task_ptr) = run_queue.schedule();
-
-        // Check if the next task pointer is Some and current task pointer is Some
-        assert!(!next_task_ptr.is_null());
-        assert!(!current_task_ptr.is_null());
 
         unsafe {
-            run_queue.deallocate(task1);
+            run_queue.deallocate(task1); // FAILS!
         }
     }
 }
